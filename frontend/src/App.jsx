@@ -1,99 +1,138 @@
+
 import { useEffect, useState } from 'react'
 import './App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4571";
+const STORAGE_KEY = 'jobTrackerDemoApplications'
+const USER_KEY = 'jobTrackerDemoUser'
+
+const sampleApplications = [
+  {
+    applicationId: 1,
+    companyName: 'Tesla',
+    jobTitle: 'Software Engineer',
+    jobType: 'Full-time',
+    location: 'Germany',
+    salary: '85000',
+    applicationDate: '2026-10-01',
+    status: 'Selected',
+    source: 'LinkedIn',
+    jobDescription: 'Software development opportunity.',
+    notes: 'Sample demo application'
+  },
+  {
+    applicationId: 2,
+    companyName: 'Infosys',
+    jobTitle: 'Java Developer',
+    jobType: 'Full-time',
+    location: 'Hyderabad',
+    salary: '600000',
+    applicationDate: '2026-10-04',
+    status: 'Interview',
+    source: 'Company Website',
+    jobDescription: 'Java and Spring Boot development.',
+    notes: 'Prepare for the technical interview'
+  },
+  {
+    applicationId: 3,
+    companyName: 'TCS',
+    jobTitle: 'Junior Software Developer',
+    jobType: 'Full-time',
+    location: 'Bangalore',
+    salary: '500000',
+    applicationDate: '2026-10-08',
+    status: 'Applied',
+    source: 'Naukri',
+    jobDescription: 'Entry-level software developer role.',
+    notes: 'Waiting for a response'
+  }
+]
+
+function getInitialApplications() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+
+    if (saved !== null) {
+      return JSON.parse(saved)
+    }
+  } catch (error) {
+    console.error('Could not load demo applications:', error)
+  }
+
+  return sampleApplications
+}
+
+const emptyForm = {
+  companyName: '',
+  jobTitle: '',
+  jobType: 'Full-time',
+  location: '',
+  salary: '',
+  applicationDate: new Date().toLocaleDateString('en-CA'),
+  status: 'Applied',
+  source: '',
+  jobDescription: '',
+  notes: ''
+}
 
 function App() {
-  const [companies, setCompanies] = useState([])
-  const [applications, setApplications] = useState([])
+  const [applications, setApplications] = useState(getInitialApplications)
+  const [activeUserName, setActiveUserName] = useState(
+    () => localStorage.getItem(USER_KEY) || ''
+  )
+  const [profileName, setProfileName] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
-  const [profileName, setProfileName] = useState('')
-  const [activeUserName, setActiveUserName] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [formData, setFormData] = useState({ ...emptyForm })
+  const [error, setError] = useState('')
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(applications))
+    } catch (err) {
+      setError('Unable to save data in this browser.')
+    }
+  }, [applications])
 
-  const [formData, setFormData] = useState({
-    companyName: '',
-    jobTitle: '',
-    jobType: '',
-    location: '',
-    salary: '',
-    applicationDate: '',
-    status: '',
-    source: '',
-    jobDescription: '',
-    notes: ''
-  });
-  // Dashboard statistics
   const totalApplications = applications.length
 
   const interviewCount = applications.filter(
-    app => app.status?.toUpperCase() === 'INTERVIEW'
+    app => app.status === 'Interview'
   ).length
 
   const selectedCount = applications.filter(
-    app => app.status?.toUpperCase() === 'SELECTED'
+    app => app.status === 'Selected'
   ).length
 
   const rejectedCount = applications.filter(
-    app => app.status?.toUpperCase() === 'REJECTED'
+    app => app.status === 'Rejected'
   ).length
 
-  // Filter applications by status
-  const filteredApplications =
-    statusFilter === 'All'
-      ? applications
-      : applications.filter(
-          app => app.status?.toUpperCase() === statusFilter.toUpperCase()
-        )
+  const filteredApplications = applications.filter(app => {
+    const matchesStatus =
+      statusFilter === 'All' || app.status === statusFilter
 
-		useEffect(() => {
-		  loadCompanies()
-		}, [])
+    const search = searchTerm.trim().toLowerCase()
 
-		useEffect(() => {
-		  if (activeUserName) {
-		    loadApplications()
-		  }
-		}, [activeUserName])
+    const matchesSearch =
+      !search ||
+      app.companyName.toLowerCase().includes(search) ||
+      app.jobTitle.toLowerCase().includes(search) ||
+      app.location.toLowerCase().includes(search)
 
+    return matchesStatus && matchesSearch
+  })
 
-  async function loadCompanies() {
-    try {
-      const response = await fetch(`${API_URL}/companies`)
+  function handleProfileSubmit(event) {
+    event.preventDefault()
 
-      if (!response.ok) {
-        throw new Error('Unable to load companies.')
-      }
+    const name = profileName.trim()
 
-      const data = await response.json()
-      setCompanies(data)
-    } catch (err) {
-      setError(`Companies: ${err.message}`)
-    }
-  }
+    if (!name) return
 
-  async function loadApplications() {
-    try {
-      setLoading(true)
-
-	  const response = await fetch(
-	    `${API_URL}/applications/user/${encodeURIComponent(activeUserName)}`
-	  )
-      if (!response.ok) {
-        throw new Error('Unable to load applications.')
-      }
-
-      const data = await response.json()
-      setApplications(data)
-    } catch (err) {
-      setError(`Applications: ${err.message}`)
-    } finally {
-      setLoading(false)
-    }
+    setActiveUserName(name)
+    localStorage.setItem(USER_KEY, name)
   }
 
   function handleChange(event) {
@@ -104,248 +143,205 @@ function App() {
       [name]: value
     }))
   }
-  function handleProfileSubmit(event) {
+
+  function handleSubmit(event) {
     event.preventDefault()
+    setError('')
 
-    const name = profileName.trim()
+    const companyName = formData.companyName.trim()
+    const jobTitle = formData.jobTitle.trim()
 
-    if (!name) {
+    if (!companyName || !jobTitle) {
+      setError('Please enter both the company name and job title.')
       return
     }
 
-    setActiveUserName(name)
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError('');
-
-    try {
-      const enteredCompanyName = formData.companyName.trim();
-
-      if (!enteredCompanyName) {
-        setError('Please enter a company name.');
-        return;
-      }
-
-      // Find the company by name, ignoring uppercase/lowercase differences.
-      let company = companies.find(
-        item =>
-          item.companyName?.trim().toLowerCase() ===
-          enteredCompanyName.toLowerCase()
-      );
-
-      // Create the company if it does not already exist.
-      if (!company) {
-        const companyResponse = await fetch(`${API_URL}/companies`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            companyName: enteredCompanyName
-          })
-        });
-
-        if (!companyResponse.ok) {
-          const message = await companyResponse.text();
-          throw new Error(message || 'Failed to create company.');
-        }
-
-        company = await companyResponse.json();
-
-        setCompanies(previous => [...previous, company]);
-      }
-
-      // Send the backend fields, including the company ID.
-	  const applicationFields = { ...formData };
-	  delete applicationFields.companyName;
-
-	  const payload = {
-	    ...applicationFields,
-	    companyId: company.companyId,
-	    userName: activeUserName,
-	    salary: Number(formData.salary || 0)
-	  };
-
-
-      const isEditing = editingId !== null;
-
-      const url = isEditing
-        ? `${API_URL}/applications/${editingId}`
-        : `${API_URL}/applications`;
-
-      const response = await fetch(url, {
-        method: isEditing ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || 'Failed to save application.');
-      }
-
-      setFormData({
-        companyName: '',
-        jobTitle: '',
-        jobType: '',
-        location: '',
-        salary: '',
-        applicationDate: '',
-        status: '',
-        source: '',
-        jobDescription: '',
-        notes: ''
-      });
-
-      setEditingId(null);
-      setShowForm(false);
-
-      await loadApplications();
-
-      alert(
-        isEditing
-          ? 'Application updated successfully!'
-          : 'Job application saved successfully!'
-      );
-    } catch (err) {
-      setError(err.message);
+    const application = {
+      ...formData,
+      companyName,
+      jobTitle,
+      salary: formData.salary,
+      applicationId: editingId ?? Date.now()
     }
+
+    if (editingId !== null) {
+      setApplications(previous =>
+        previous.map(item =>
+          item.applicationId === editingId ? application : item
+        )
+      )
+    } else {
+      setApplications(previous => [application, ...previous])
+    }
+
+    setFormData({ ...emptyForm })
+    setEditingId(null)
+    setShowForm(false)
   }
 
   function handleEdit(application) {
-    const company = companies.find(
-      item => item.companyId === application.companyId
-    );
-
-    setEditingId(application.applicationId);
+    setEditingId(application.applicationId)
 
     setFormData({
-      companyName: company?.companyName || '',
-      jobTitle: application.jobTitle || '',
-      jobType: application.jobType || 'Full-time',
-      location: application.location || '',
-      salary: String(application.salary ?? ''),
-      applicationDate: application.applicationDate || '',
-      status: application.status || 'Applied',
-      source: application.source || '',
-      jobDescription: application.jobDescription || '',
-      notes: application.notes || ''
-    });
+      ...emptyForm,
+      ...application
+    })
 
-    setShowForm(true);
+    setShowForm(true)
+    setError('')
+
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-
-  async function handleDelete(applicationId) {
+  function handleDelete(applicationId) {
     const confirmed = window.confirm(
       'Are you sure you want to delete this application?'
     )
 
     if (!confirmed) return
 
-    try {
-      setError('')
-
-      const response = await fetch(
-        `${API_URL}/applications/${applicationId}`,
-        { method: 'DELETE' }
-      )
-
-      if (!response.ok) {
-        throw new Error('Failed to delete application.')
-      }
-
-      await loadApplications()
-      alert('Application deleted successfully!')
-    } catch (err) {
-      setError(err.message)
-    }
+    setApplications(previous =>
+      previous.filter(app => app.applicationId !== applicationId)
+    )
   }
+
+  function handleCancel() {
+    setShowForm(false)
+    setEditingId(null)
+    setFormData({ ...emptyForm })
+    setError('')
+  }
+
+  function handleLogout() {
+    localStorage.removeItem(USER_KEY)
+    setActiveUserName('')
+    setProfileName('')
+  }
+
   if (!activeUserName) {
-  	    return (
-  	      <div className="app">
-  	        <div className="application-card">
-  	          <h1>Welcome to Job Application Tracker</h1>
-  	          <p>Enter your name to view your job applications.</p>
+    return (
+      <main className="app">
+        <section className="application-card welcome-card">
+          <div className="welcome-icon">💼</div>
 
-			  <form onSubmit={handleProfileSubmit} className="welcome-form">
-			    <label htmlFor="profileName">Your Name</label>
+          <h1>Welcome to Job Application Tracker</h1>
 
-			    <input
-			      id="profileName"
-			      type="text"
-			      value={profileName}
-			      onChange={(event) => setProfileName(event.target.value)}
-			      placeholder="Enter your name"
-			      required
-			    />
+          <p>
+            Organize your job search, track opportunities, and
+            manage your career journey in one place.
+          </p>
 
-			    <button type="submit">Continue</button>
-			  </form>
-  	        </div>
-  	      </div>
-  	    )
-  	  }
+          <form onSubmit={handleProfileSubmit} className="welcome-form">
+            <label htmlFor="profileName">Your Name</label>
 
+            <input
+              id="profileName"
+              type="text"
+              value={profileName}
+              onChange={event => setProfileName(event.target.value)}
+              placeholder="Enter your name"
+              required
+            />
+
+            <button type="submit">Continue to Dashboard →</button>
+          </form>
+
+          <p className="demo-notice">
+            Demo mode · Sample applications included
+          </p>
+        </section>
+      </main>
+    )
+  }
 
   return (
-    <div className="app">
-      <h1>Job Application Tracker</h1>
-      <p>Manage and track your job applications in one place.</p>
+    <main className="app">
+      <header className="dashboard-header">
+        <div>
+          <p className="eyebrow">YOUR CAREER WORKSPACE</p>
+          <h1>Job Application Tracker</h1>
+          <p>
+            Welcome, {activeUserName}! Keep your job search organized.
+          </p>
+        </div>
 
-	  <div className="dashboard-stats">
-	    <div className="stat-card">
-	      <h3>Total Applications</h3>
-	      <p>{totalApplications}</p>
-	    </div>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={handleLogout}
+        >
+          Change User
+        </button>
+      </header>
 
-	    <div className="stat-card">
-	      <h3>Interviews</h3>
-	      <p>{interviewCount}</p>
-	    </div>
+      <section className="dashboard-stats">
+        <div className="stat-card">
+          <span className="stat-icon">📋</span>
+          <h3>Total Applications</h3>
+          <p>{totalApplications}</p>
+        </div>
 
-	    <div className="stat-card">
-	      <h3>Selected</h3>
-	      <p>{selectedCount}</p>
-	    </div>
+        <div className="stat-card">
+          <span className="stat-icon">🤝</span>
+          <h3>Interviews</h3>
+          <p>{interviewCount}</p>
+        </div>
 
-	    <div className="stat-card">
-	      <h3>Rejected</h3>
-	      <p>{rejectedCount}</p>
-	    </div>
-	  </div>
+        <div className="stat-card">
+          <span className="stat-icon">🎉</span>
+          <h3>Selected</h3>
+          <p>{selectedCount}</p>
+        </div>
 
+        <div className="stat-card">
+          <span className="stat-icon">📌</span>
+          <h3>Rejected</h3>
+          <p>{rejectedCount}</p>
+        </div>
+      </section>
 
       {error && <p className="error-message">{error}</p>}
 
-      <div className="application-card">
-        <h2>My Job Applications</h2>
-        <p>Track your applications and their current status.</p>
+      <section className="application-card">
+        <div className="section-heading">
+          <div>
+            <h2>{editingId !== null ? 'Edit Application' : 'My Job Applications'}</h2>
+            <p>Add a new opportunity or update an existing application.</p>
+          </div>
 
-        <button onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'Add Job Application'}
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (showForm) {
+                handleCancel()
+              } else {
+                setShowForm(true)
+                setEditingId(null)
+                setFormData({ ...emptyForm })
+              }
+            }}
+          >
+            {showForm ? 'Cancel' : '+ Add Job Application'}
+          </button>
+        </div>
 
         {showForm && (
           <form className="job-form" onSubmit={handleSubmit}>
-          <h2>{editingId ? 'Edit Application' : 'Add New Application'}</h2>
+            <h2>
+              {editingId !== null ? 'Update Job Details' : 'Add New Application'}
+            </h2>
 
+            <label htmlFor="companyName">Company Name *</label>
+            <input
+              id="companyName"
+              name="companyName"
+              value={formData.companyName}
+              onChange={handleChange}
+              placeholder="e.g. TCS, Infosys, Wipro"
+              required
+            />
 
-		  <label htmlFor="companyName">Company Name</label>
-		  <input
-		    id="companyName"
-		    name="companyName"
-		    value={formData.companyName}
-		    onChange={handleChange}
-		    placeholder="e.g. TCS, Infosys, Wipro"
-		    required
-		  />
-
-            <label htmlFor="jobTitle">Job Title</label>
+            <label htmlFor="jobTitle">Job Title *</label>
             <input
               id="jobTitle"
               name="jobTitle"
@@ -374,7 +370,7 @@ function App() {
               name="location"
               value={formData.location}
               onChange={handleChange}
-              placeholder="e.g. Bangalore"
+              placeholder="e.g. Hyderabad"
             />
 
             <label htmlFor="salary">Salary</label>
@@ -388,7 +384,7 @@ function App() {
               placeholder="Enter salary"
             />
 
-            <label htmlFor="applicationDate">Application Date</label>
+            <label htmlFor="applicationDate">Application Date *</label>
             <input
               id="applicationDate"
               name="applicationDate"
@@ -436,76 +432,135 @@ function App() {
               name="notes"
               value={formData.notes}
               onChange={handleChange}
-              placeholder="Add notes"
+              placeholder="Add notes or reminders"
               rows="3"
             />
 
-			<button type="submit">
-			  {editingId ? 'Update Application' : 'Save Application'}
-			</button>
-			</form>
+            <div className="form-actions">
+              <button type="submit">
+                {editingId !== null ? 'Update Application' : 'Save Application'}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleCancel}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         )}
-      </div>
+      </section>
 
       <section className="applications-list">
-        <h2>Saved Applications</h2>
-		<label htmlFor="statusFilter">Filter by Status:</label>
+        <div className="section-heading">
+          <div>
+            <h2>Saved Applications</h2>
+            <p>Review and manage your opportunities.</p>
+          </div>
+          <span className="application-count">
+            {filteredApplications.length} shown
+          </span>
+        </div>
 
-		<select
-		  id="statusFilter"
-		  value={statusFilter}
-		  onChange={(event) => setStatusFilter(event.target.value)}
-		>
-		  <option value="All">All Applications</option>
-		  <option value="Applied">Applied</option>
-		  <option value="Interview">Interview</option>
-		  <option value="Selected">Selected</option>
-		  <option value="Rejected">Rejected</option>
-		</select>
+        <div className="filter-bar">
+          <div className="search-field">
+            <label htmlFor="searchTerm">Search</label>
+            <input
+              id="searchTerm"
+              type="search"
+              value={searchTerm}
+              onChange={event => setSearchTerm(event.target.value)}
+              placeholder="Company, job title, or location"
+            />
+          </div>
 
-        {loading ? (
-          <p>Loading applications...</p>
-        ) : applications.length === 0 ? (
-          <p>No applications saved yet. Add your first application!</p>
+          <div className="filter-field">
+            <label htmlFor="statusFilter">Filter by Status</label>
+            <select
+              id="statusFilter"
+              value={statusFilter}
+              onChange={event => setStatusFilter(event.target.value)}
+            >
+              <option value="All">All Applications</option>
+              <option value="Applied">Applied</option>
+              <option value="Interview">Interview</option>
+              <option value="Selected">Selected</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        {filteredApplications.length === 0 ? (
+          <div className="empty-state">
+            <span>🔎</span>
+            <h3>No applications found</h3>
+            <p>Try another search or add a new job application.</p>
+          </div>
         ) : (
-			filteredApplications.map(application => {
-			  const company = companies.find(
-			    item => item.companyId === application.companyId
-			  )
-            return (
+          <div className="saved-applications-grid">
+            {filteredApplications.map(application => (
               <article
                 className="saved-application"
                 key={application.applicationId}
               >
-			    <p><strong>Job Title:</strong> {application.jobTitle || 'Not specified'}</p>
-                <p><strong>Company:</strong> {company?.companyName || `Company #${application.companyId}`}</p>
-                <p><strong>Location:</strong> {application.location || 'Not specified'}</p>
-                <p><strong>Type:</strong> {application.jobType || 'Not specified'}</p>
-                <p><strong>Date:</strong> {application.applicationDate || 'Not specified'}</p>
-                <p><strong>Status:</strong> {application                .status || 'Not specified'}</p>
+                <div className="saved-application-heading">
+                  <div>
+                    <h3>{application.jobTitle}</h3>
+                    <p className="company-name">{application.companyName}</p>
+                  </div>
 
-				<div className="application-actions">
-				  <button
-				    type="button"
-				    onClick={() => handleEdit(application)}
-				  >
-				    Edit
-				  </button>
+                  <span
+                    className={`status-badge status-${application.status.toLowerCase()}`}
+                  >
+                    {application.status}
+                  </span>
+                </div>
 
-				  <button
-				    type="button"
-				    onClick={() => handleDelete(application.applicationId)}
-				  >
-				    Delete
-				  </button>
-				</div>
+                <div className="application-details">
+                  <p><strong>📍 Location:</strong> {application.location || 'Not specified'}</p>
+                  <p><strong>💼 Type:</strong> {application.jobType}</p>
+                  <p><strong>📅 Date:</strong> {application.applicationDate || 'Not specified'}</p>
+                  <p><strong>💰 Salary:</strong> {application.salary ? Number(application.salary).toLocaleString() : 'Not specified'}</p>
+                  {application.source && (
+                    <p><strong>Source:</strong> {application.source}</p>
+                  )}
+                </div>
 
+                {application.notes && (
+                  <p className="application-notes">
+                    <strong>Notes:</strong> {application.notes}
+                  </p>
+                )}
+
+                <div className="application-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => handleEdit(application)}
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    type="button"
+                    className="delete-button"
+                    onClick={() => handleDelete(application.applicationId)}
+                  >
+                    Delete
+                  </button>
+                </div>
               </article>
-            )
-          })
+            ))}
+          </div>
         )}
       </section>
-    </div>
+
+      <footer className="demo-footer">
+        Job Application Tracker · Browser demo mode
+      </footer>
+    </main>
   )
 }
 
